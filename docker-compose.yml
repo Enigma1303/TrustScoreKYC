@@ -3,24 +3,36 @@ version: "3.9"
 services:
   web:
     build: .
-    command: python manage.py runserver 0.0.0.0:8000
+    command: sh -c "python wait_for_db.py && python manage.py runserver 0.0.0.0:8000 --noreload"
     volumes:
       - ./app:/app
+      - media_volume:/app/media  
     ports:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      DB_HOST: db
+      DB_NAME: complaint_db
+      DB_USER: complaint_user
+      DB_PASSWORD: complaint_pass
+      DB_PORT: 3306
     depends_on:
       - db
 
   db:
-    image: postgres:15
+    image: mysql:8.0
+    restart: always
     environment:
-      POSTGRES_DB: complaint_db
-      POSTGRES_USER: complaint_user
-      POSTGRES_PASSWORD: complaint_pass
+      MYSQL_DATABASE: complaint_db
+      MYSQL_USER: complaint_user
+      MYSQL_PASSWORD: complaint_pass
+      MYSQL_ROOT_PASSWORD: rootpass
+    ports:
+      - "3306:3306"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mysql_data:/var/lib/mysql
 
 volumes:
-  postgres_data:
+  mysql_data:
+  media_volume:  

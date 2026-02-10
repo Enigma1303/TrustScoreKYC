@@ -5,12 +5,17 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
+# System dependencies for mysqlclient
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libpq-dev \
+    && apt-get install -y --no-install-recommends \
+        default-libmysqlclient-dev \
+        gcc \
+        pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
 
 COPY app/ /app/
 
@@ -20,4 +25,6 @@ RUN addgroup --system django \
 
 USER django
 
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+CMD ["sh", "-c", "python wait_for_db.py && python manage.py runserver 0.0.0.0:8000 --noreload"]
+
+
