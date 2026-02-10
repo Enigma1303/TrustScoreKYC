@@ -10,7 +10,7 @@ from kyc.models import KYCApplication
 from kyc.serializers import (
     KYCApplicationSerializer,
     KYCApplicationListSerializer,
-    DocumentUploadSerializer
+    DocumentUploadSerializer,
 )
 
 
@@ -26,17 +26,29 @@ class KYCApplicationViewSet(viewsets.ModelViewSet):
         return KYCApplication.objects.filter(user=user)
 
     def get_serializer_class(self):
-        return (
-            KYCApplicationListSerializer
-            if self.action == 'list'
-            else KYCApplicationSerializer
-        )
+        if self.action == 'list':
+            return KYCApplicationListSerializer
+        return KYCApplicationSerializer
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
     @extend_schema(
-        request=DocumentUploadSerializer,
+        request={
+            "multipart/form-data": {
+                "type": "object",
+                "properties": {
+                    "document_type": {
+                        "type": "string"
+                    },
+                    "file": {
+                        "type": "string",
+                        "format": "binary"
+                    }
+                },
+                "required": ["document_type", "file"]
+            }
+        },
         responses={201: DocumentUploadSerializer},
     )
     @action(
