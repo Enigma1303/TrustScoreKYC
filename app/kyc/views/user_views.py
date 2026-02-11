@@ -7,10 +7,12 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from drf_spectacular.utils import extend_schema
 
 from kyc.models import KYCApplication
+from kyc.models import StatusHistory
 from kyc.serializers import (
     KYCApplicationSerializer,
     KYCApplicationListSerializer,
     DocumentUploadSerializer,
+    StatusHistorySerializer
 )
 
 
@@ -84,5 +86,77 @@ class KYCApplicationViewSet(viewsets.ModelViewSet):
     def status(self,request,pk=None):
         application=self.get_object()
         return Response({application.current_status})
+    
+    @action(detail=True, methods=['get'], url_path='history')
+    def history(self,request,pk=None):
+        application=self.get_object()
+        history_records=application.statushistory.all()
+        serializer=StatusHistorySerializer(history_records,many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+
+    ALLOWED_TRANSITIONS = {
+    "SUBMITTED": ["IN_REVIEW"],
+    "IN_REVIEW": ["APPROVED", "REJECTED"],
+    "APPROVED": [],
+    "REJECTED": [],
+}
+
+    @action(detail=True, methods=['post'], url_path='change-status')
+    def change_status(self, request, pk=None):
+       application = self.get_object()
+
+       if not hasattr(request.user, "role") or request.user.role != "ADMIN":
+          return Response(
+            {"error": "Only admins can change status."},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+       new_status = request.data.get("new_status")
+
+       if not new_status:
+        return Response( {"error": "new_status is required."},status=status.HTTP_400_BAD_REQUEST )
+
+       old_status = application.current_status
+       if new_status == old_status:
+           return Response({"error": "Application already in this status."},status=status.HTTP_400_BAD_REQUEST)
+
+       allowed_next_status = self.ALLOWED_TRANSITIONS.get(old_status, [])
+       if new_status not in allowed_next_status:
+        return Response(
+            {
+                "error": f"Cannot change status from {old_status} to {new_status}."
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+       StatusHistory.objects.create(
+                application=application,
+                old_status=old_status,
+                new_status=new_status,
+                 changed_by=request.user
+    )
+
+       application.current_status = new_status
+       application.save()
+
+       return Response(
+        {
+            "message": "Status updated successfully.",
+            "old_status": old_status,
+            "current_status": application.current_status
+        },
+        status=status.HTTP_200_OK
+    )
+
+
+
+
+
+
+
+    
+
+    
     
 
