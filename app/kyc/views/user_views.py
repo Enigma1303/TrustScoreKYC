@@ -189,7 +189,16 @@ class KYCApplicationViewSet(viewsets.ModelViewSet):
         )
         serializer=ReviewerCommentSerializer(comment_obj)
         return Response(serializer.data,status=status.HTTP_201_CREATED)
+    
 
+    @action(detail=False,methods=["get"],url_path="AdminDashBoard_pending")
+    def pending(self,request):
+        if not hasattr(request.user,"role") or request.user.role!="ADMIN":
+            return Response({"Only Admins can Access Pending Applications"},status=status.HTTP_403_FORBIDDEN)
+        pending_applications=KYCApplication.objects.filter(current_status__in=["SUBMITTED","IN_REVIEW"])
+
+        serializer=KYCApplicationListSerializer(pending_applications,many=True)
+        return Response(serializer.data)
 
 
 
