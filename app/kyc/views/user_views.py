@@ -8,11 +8,13 @@ from drf_spectacular.utils import extend_schema
 
 from kyc.models import KYCApplication
 from kyc.models import StatusHistory
+from kyc.models import ReviewerComment
 from kyc.serializers import (
     KYCApplicationSerializer,
     KYCApplicationListSerializer,
     DocumentUploadSerializer,
-    StatusHistorySerializer
+    StatusHistorySerializer,
+    ReviewerCommentSerializer
 )
 
 
@@ -148,6 +150,38 @@ class KYCApplicationViewSet(viewsets.ModelViewSet):
         },
         status=status.HTTP_200_OK
     )
+
+
+    @action(detail=True,methods=["get"],url_path="reviewcomments")
+    def list_comments(self,request,pk=None):
+        application=self.get_object()
+        comments=application.comments.all()
+        serializer=ReviewerCommentSerializer(comments,many=True)
+
+        return Response(serializer.data)
+
+    @action(detail=True,methods=["post"],url_path="add-reviewcomment")
+    def add_comment(self,request,pk=None):
+        application=self.get_object()
+        #verify he is admin 
+        if not hasattr(request.user,"role") or request.user.role !="ADMIN":
+            return Response("Only Admins are authorized to add comment",status=status.HTTP_403_FORBIDDEN)
+        comment=request.data.get("comment_text")
+        
+        #check comment is not empty
+        if not comment:
+           return Response({"error": "comment_text is required."},status=status.HTTP_400_BAD_REQUEST)
+        
+        comment_obj= ReviewerComment.objects.create(
+            application=application,
+            reviewer=request.user, 
+            comment_text=comment,
+        )
+        serializer=ReviewerCommentSerializer(comment_obj)
+        return Response(serializer.data,status=status.HTTP_201_CREATED)
+
+
+
 
 
 
