@@ -77,3 +77,12 @@ class KYCApplicationViewSet(viewsets.ModelViewSet):
         documents = self.get_object().documents.all()
         serializer = DocumentUploadSerializer(documents, many=True)
         return Response(serializer.data)
+    
+
+
+    @action(detail=True, methods=['get'],url_path='current-status')
+    def status(self,request,pk=None):
+        application=self.get_object()
+        return Response({application.current_status})
+    
+
