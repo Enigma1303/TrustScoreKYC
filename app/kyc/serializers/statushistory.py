@@ -6,6 +6,6 @@ class StatusHistorySerializer(serializers.ModelSerializer):
       class Meta:
             model=StatusHistory
 
-            fields=["id","old_status","new_status","changed_by","created_at"]
+            fields=["id","old_status","new_status","changed_by","changed_at"]
 
-            read_only_fields=["id","old_status","new_status","changed_by","created_at"]
+            read_only_fields=["id","old_status","new_status","changed_by","changed_at"]
