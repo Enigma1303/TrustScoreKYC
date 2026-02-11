@@ -12,6 +12,7 @@ from rest_framework.filters import SearchFilter,OrderingFilter
 from kyc.models import KYCApplication
 from kyc.models import StatusHistory
 from kyc.models import ReviewerComment
+
 from kyc.serializers import (
     KYCApplicationSerializer,
     KYCApplicationListSerializer,
@@ -19,6 +20,8 @@ from kyc.serializers import (
     StatusHistorySerializer,
     ReviewerCommentSerializer
 )
+
+from kyc.services import compute_trust_score
 
 
 class KYCApplicationViewSet(viewsets.ModelViewSet):
@@ -84,6 +87,13 @@ class KYCApplicationViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save(application=application)
 
+        trust_score, risk_level = compute_trust_score(application)
+
+        application.trust_score = trust_score
+        application.risk_level = risk_level
+        application.save()
+
+
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['get'], url_path='documents')
@@ -111,7 +121,7 @@ class KYCApplicationViewSet(viewsets.ModelViewSet):
     "SUBMITTED": ["IN_REVIEW"],
     "IN_REVIEW": ["APPROVED", "REJECTED"],
     "APPROVED": [],
-    "REJECTED": [],
+    "REJECTED": ["SUBMITTED"],
 }
 
     @action(detail=True, methods=['post'], url_path='change-status')
@@ -200,6 +210,51 @@ class KYCApplicationViewSet(viewsets.ModelViewSet):
         serializer=KYCApplicationListSerializer(pending_applications,many=True)
         return Response(serializer.data)
 
+
+    
+    @action(detail=True,methods=["post"], url_path="resubmit")
+    def resubmit(self,request,pk=None):
+        application=self.get_object()
+        if not hasattr(request.user, "role") or request.user.role != "USER":
+           return Response(
+            {"error": "Only users can resubmit applications."},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+
+        if application.current_status != "REJECTED":
+          return Response(
+            {"error": "Only rejected applications can be resubmitted."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+        old_status=application.current_status
+        new_status="SUBMITTED"
+
+        StatusHistory.objects.create(
+            application=application,
+            old_status=old_status,
+            new_status=new_status,
+            changed_by=request.user
+
+        )
+        application.current_status=new_status
+        application.save()
+        
+        trust_score, risk_level = compute_trust_score(application)
+
+        application.trust_score = trust_score
+        application.risk_level = risk_level
+        application.save()
+
+        return Response(
+        {
+            "message": "Application resubmitted successfully.",
+            "old_status": old_status,
+            "current_status": new_status
+        },
+        status=status.HTTP_200_OK
+    )
 
 
 
