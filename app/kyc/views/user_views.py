@@ -23,7 +23,7 @@ from kyc.serializers import (
 
 class KYCApplicationViewSet(viewsets.ModelViewSet):
     """KYC applications API"""
-    
+    queryset = KYCApplication.objects.all()
 
     filter_backends=[DjangoFilterBackend,SearchFilter,OrderingFilter]
     filterset_fields=["current_status"]
