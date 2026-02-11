@@ -6,6 +6,9 @@ from rest_framework.parsers import MultiPartParser, FormParser
 
 from drf_spectacular.utils import extend_schema
 
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter,OrderingFilter
+
 from kyc.models import KYCApplication
 from kyc.models import StatusHistory
 from kyc.models import ReviewerComment
@@ -20,6 +23,13 @@ from kyc.serializers import (
 
 class KYCApplicationViewSet(viewsets.ModelViewSet):
     """KYC applications API"""
+    
+
+    filter_backends=[DjangoFilterBackend,SearchFilter,OrderingFilter]
+    filterset_fields=["current_status"]
+    search_fields = ["user__email"]
+    ordering_fields = ["created_at", "trust_score"]
+    ordering=['-created_at']
 
     permission_classes = [IsAuthenticated]
 
