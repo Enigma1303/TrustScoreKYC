@@ -6,8 +6,6 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.exceptions import MethodNotAllowed
 from rest_framework import mixins
 
-def destroy(self, request, *args, **kwargs):
-    raise MethodNotAllowed("DELETE")
 
 from drf_spectacular.utils import extend_schema
 
@@ -28,7 +26,8 @@ from kyc.serializers import (
 from kyc.services.status_rules import validate_status_transition
 
 from kyc.services import compute_trust_score
-
+import logging
+logger=logging.getLogger(__name__)
 
 class KYCApplicationViewSet(mixins.CreateModelMixin,
     mixins.ListModelMixin,
@@ -73,7 +72,15 @@ class KYCApplicationViewSet(mixins.CreateModelMixin,
         return KYCApplicationSerializer
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        try:
+          application = serializer.save(user=self.request.user)
+          logger.info(
+            f"KYC application {application.id} created by user {self.request.user.id}"
+        )
+        except Exception:
+          logger.exception("Failed to create KYC application")
+          raise
+
 
     @extend_schema(
         request={
@@ -103,23 +110,30 @@ class KYCApplicationViewSet(mixins.CreateModelMixin,
         application = self.get_object()
 
         if application.current_status in ['APPROVED', 'REJECTED']:
+            logger.warning(f"User {request.user.id} attempted document upload on APPROVED/REJECTED application {application.id}")
+            
             return Response(
                 {'error': 'Application finalized'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        try:
+          serializer = DocumentUploadSerializer(data=request.data)
+          serializer.is_valid(raise_exception=True)
+          document=serializer.save(application=application)
+          logger.info(f"Document {document.id} uploaded for application {application.id}")
 
-        serializer = DocumentUploadSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save(application=application)
-
-        trust_score, risk_level = compute_trust_score(application)
-
-        application.trust_score = trust_score
-        application.risk_level = risk_level
-        application.save()
+          trust_score, risk_level = compute_trust_score(application)
+          application.trust_score = trust_score
+          application.risk_level = risk_level
+          logger.debug(f"Trust score recalculated for application {application.id}:" f"score={trust_score}, risk={risk_level}")
+          application.save()
 
 
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+          return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except Exception:
+           logger.exception(f"Document upload failed for application {application.id}")
+           raise
+
 
     @action(detail=True, methods=['get'], url_path='documents')
     def list_documents(self, request, pk=None):
@@ -134,6 +148,9 @@ class KYCApplicationViewSet(mixins.CreateModelMixin,
         application=self.get_object()
         return Response({"current_status": application.current_status})
     
+
+
+
     @action(detail=True, methods=['get'], url_path='history')
     def history(self,request,pk=None):
         application=self.get_object()
@@ -146,40 +163,69 @@ class KYCApplicationViewSet(mixins.CreateModelMixin,
 
     @action(detail=True, methods=['post'], url_path='change-status')
     def change_status(self, request, pk=None):
-       application = self.get_object()
+     application = self.get_object()
 
-       if not self.is_admin(request.user):
-          return Response({"error": "Only admins can change status."},status=status.HTTP_403_FORBIDDEN)
+     if not self.is_admin(request.user):
+        return Response(
+            {"error": "Only admins can change status."},
+            status=status.HTTP_403_FORBIDDEN
+        )
 
-       new_status = request.data.get("new_status")
+     new_status = request.data.get("new_status")
 
-       if not new_status:
-        return Response( {"error": "new_status is required."},status=status.HTTP_400_BAD_REQUEST )
+     if not new_status:
+      return Response(
+            {"error": "new_status is required."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
-       old_status = application.current_status
-       if new_status == old_status:
-           return Response({"error": "Application already in this status."},status=status.HTTP_400_BAD_REQUEST)
+     old_status = application.current_status
 
-       try:
-        validate_status_transition(old_status, new_status)
-       except ValueError as e:
-           return Response({"error": str(e)},status=status.HTTP_400_BAD_REQUEST)
+     if new_status == old_status:
+         return Response(
+            {"error": "Application already in this status."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
+     try:
+         validate_status_transition(old_status, new_status)
+     except ValueError as e:
+        logger.warning(
+            f"Invalid status transition for application {application.id}: "
+            f"{old_status} -> {new_status}"
+        )
+        return Response(
+            {"error": str(e)},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
-       self.create_status_history(application, old_status, new_status, request.user)
+     try:
+        self.create_status_history(application,old_status,new_status,request.user)
 
+        application.current_status = new_status
+        application.save()
 
-       application.current_status = new_status
-       application.save()
+        logger.info(
+            f"Application {application.id} status changed "
+            f"from {old_status} to {new_status} "
+            f"by admin {request.user.id}"
+        )
 
-       return Response(
+     except Exception:
+        logger.exception(
+            f"Failed to update status for application {application.id}"
+        )
+        raise
+
+     return Response(
         {
             "message": "Status updated successfully.",
             "old_status": old_status,
-            "current_status": application.current_status
+            "current_status": new_status
         },
         status=status.HTTP_200_OK
     )
+
 
 
     @action(detail=True,methods=["get"],url_path="reviewcomments")
@@ -241,22 +287,28 @@ class KYCApplicationViewSet(mixins.CreateModelMixin,
         old_status=application.current_status
         new_status="SUBMITTED"
 
-        self.create_status_history(application, old_status, new_status, request.user)
+        
+        try:  
+         self.create_status_history(application, old_status, new_status, request.user)
+         application.current_status=new_status 
 
-        application.current_status=new_status 
-        trust_score, risk_level = compute_trust_score(application)
-        application.trust_score = trust_score
-        application.risk_level = risk_level
+         trust_score, risk_level = compute_trust_score(application)
+         logger.debug(f"trustscore={trust_score},risk={risk_level} for application {application.id}")
+         application.trust_score = trust_score
+         application.risk_level = risk_level
 
-        application.save()
+         application.save()
+        except Exception:
+         logger.exception(f"Failed during resubmission {application.id}")
+         raise 
 
         return Response(
-        {
+         {
             "message": "Application resubmitted successfully.",
             "old_status": old_status,
             "current_status": new_status
-        },
-        status=status.HTTP_200_OK
+         },
+         status=status.HTTP_200_OK
     )
 
 
