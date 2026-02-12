@@ -1,4 +1,5 @@
 from kyc.models import DocumentUpload
+from django.utils import timezone
 
 def compute_document_completion_score(application):
     required_documents=[
@@ -20,17 +21,31 @@ def calculate_resubmission_score(application):
     return resubmissions*0.1
 
 
+def caclulate_profileconsistency_score(user):
+
+    account_age_days=(timezone.now()-user.created_at).days 
+    score=0
+    if account_age_days > 365:
+        score += 0.3
+    elif account_age_days > 180:
+        score += 0.2
+    elif account_age_days > 30:
+        score += 0.1
+    
+    return score
+
+
 def compute_trust_score(application):
+    user=application.user
     document_score = compute_document_completion_score(application)
     resubmission_penalty = calculate_resubmission_score(application)
+    profile_consistency=caclulate_profileconsistency_score(user)
+   
 
-    # Ensure score doesn't go below 0
-    final_ratio_score = max(document_score - resubmission_penalty, 0)
+    final_ratio_score = max(document_score - resubmission_penalty + profile_consistency, 0)
 
-    # Convert to 0–100 scale
+    
     trust_score = int(final_ratio_score * 100)
-
-    # Determine risk level
     if trust_score >= 80:
         risk_level = "LOW"
     elif trust_score >= 50:
