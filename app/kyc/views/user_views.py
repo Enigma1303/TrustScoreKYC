@@ -20,6 +20,7 @@ from kyc.serializers import (
     StatusHistorySerializer,
     ReviewerCommentSerializer
 )
+from kyc.services.status_rules import validate_status_transition
 
 from kyc.services import compute_trust_score
 
@@ -104,7 +105,7 @@ class KYCApplicationViewSet(viewsets.ModelViewSet):
     
 
 
-    @action(detail=True, methods=['get'],url_path='current-status')
+    @action(detail=True, methods=['get'],url_path='status')
     def status(self,request,pk=None):
         application=self.get_object()
         return Response({application.current_status})
@@ -117,12 +118,7 @@ class KYCApplicationViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_200_OK)
     
 
-    ALLOWED_TRANSITIONS = {
-    "SUBMITTED": ["IN_REVIEW"],
-    "IN_REVIEW": ["APPROVED", "REJECTED"],
-    "APPROVED": [],
-    "REJECTED": ["SUBMITTED"],
-}
+
 
     @action(detail=True, methods=['post'], url_path='change-status')
     def change_status(self, request, pk=None):
@@ -143,14 +139,11 @@ class KYCApplicationViewSet(viewsets.ModelViewSet):
        if new_status == old_status:
            return Response({"error": "Application already in this status."},status=status.HTTP_400_BAD_REQUEST)
 
-       allowed_next_status = self.ALLOWED_TRANSITIONS.get(old_status, [])
-       if new_status not in allowed_next_status:
-        return Response(
-            {
-                "error": f"Cannot change status from {old_status} to {new_status}."
-            },
-            status=status.HTTP_400_BAD_REQUEST
-        )
+       try:
+        validate_status_transition(old_status, new_status)
+       except ValueError as e:
+           return Response({"error": str(e)},status=status.HTTP_400_BAD_REQUEST)
+
 
        StatusHistory.objects.create(
                 application=application,
@@ -201,7 +194,7 @@ class KYCApplicationViewSet(viewsets.ModelViewSet):
         return Response(serializer.data,status=status.HTTP_201_CREATED)
     
 
-    @action(detail=False,methods=["get"],url_path="AdminDashBoard_pending")
+    @action(detail=False,methods=["get"],url_path="pending")
     def pending(self,request):
         if not hasattr(request.user,"role") or request.user.role!="ADMIN":
             return Response({"Only Admins can Access Pending Applications"},status=status.HTTP_403_FORBIDDEN)
