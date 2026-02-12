@@ -37,6 +37,13 @@ class KYCApplicationViewSet(viewsets.ModelViewSet):
 
     permission_classes = [IsAuthenticated]
 
+    def is_admin(self, user):
+     return hasattr(user, "role") and user.role == "ADMIN"
+
+    def is_user_role(self, user):
+     return hasattr(user, "role") and user.role == "USER"
+
+
     def get_queryset(self):
         user = self.request.user
         if hasattr(user, 'role') and user.role == 'ADMIN':
@@ -124,11 +131,8 @@ class KYCApplicationViewSet(viewsets.ModelViewSet):
     def change_status(self, request, pk=None):
        application = self.get_object()
 
-       if not hasattr(request.user, "role") or request.user.role != "ADMIN":
-          return Response(
-            {"error": "Only admins can change status."},
-            status=status.HTTP_403_FORBIDDEN
-        )
+       if not self.is_admin(request.user):
+          return Response({"error": "Only admins can change status."},status=status.HTTP_403_FORBIDDEN)
 
        new_status = request.data.get("new_status")
 
@@ -177,7 +181,7 @@ class KYCApplicationViewSet(viewsets.ModelViewSet):
     def add_comment(self,request,pk=None):
         application=self.get_object()
         #verify he is admin 
-        if not hasattr(request.user,"role") or request.user.role !="ADMIN":
+        if not self.is_admin(request.user):
             return Response({"error":"Only Admins are authorized to add comment"},status=status.HTTP_403_FORBIDDEN)
         comment=request.data.get("comment_text")
         
@@ -196,7 +200,7 @@ class KYCApplicationViewSet(viewsets.ModelViewSet):
 
     @action(detail=False,methods=["get"],url_path="pending")
     def pending(self,request):
-        if not hasattr(request.user,"role") or request.user.role!="ADMIN":
+        if not self.is_admin(request.user):
             return Response({"error":"Only Admins can Access Pending Applications"},status=status.HTTP_403_FORBIDDEN)
         pending_applications=KYCApplication.objects.filter(current_status__in=["SUBMITTED","IN_REVIEW"])
 
@@ -208,7 +212,7 @@ class KYCApplicationViewSet(viewsets.ModelViewSet):
     @action(detail=True,methods=["post"], url_path="resubmit")
     def resubmit(self,request,pk=None):
         application=self.get_object()
-        if not hasattr(request.user, "role") or request.user.role != "USER":
+        if not self.is_user_role(request.user):
            return Response(
             {"error": "Only users can resubmit applications."},
             status=status.HTTP_403_FORBIDDEN
