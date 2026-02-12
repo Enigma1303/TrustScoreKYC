@@ -108,7 +108,7 @@ class KYCApplicationViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'],url_path='status')
     def status(self,request,pk=None):
         application=self.get_object()
-        return Response({application.current_status})
+        return Response({"current_status": application.current_status})
     
     @action(detail=True, methods=['get'], url_path='history')
     def history(self,request,pk=None):
@@ -178,7 +178,7 @@ class KYCApplicationViewSet(viewsets.ModelViewSet):
         application=self.get_object()
         #verify he is admin 
         if not hasattr(request.user,"role") or request.user.role !="ADMIN":
-            return Response("Only Admins are authorized to add comment",status=status.HTTP_403_FORBIDDEN)
+            return Response({"error":"Only Admins are authorized to add comment"},status=status.HTTP_403_FORBIDDEN)
         comment=request.data.get("comment_text")
         
         #check comment is not empty
@@ -197,7 +197,7 @@ class KYCApplicationViewSet(viewsets.ModelViewSet):
     @action(detail=False,methods=["get"],url_path="pending")
     def pending(self,request):
         if not hasattr(request.user,"role") or request.user.role!="ADMIN":
-            return Response({"Only Admins can Access Pending Applications"},status=status.HTTP_403_FORBIDDEN)
+            return Response({"error":"Only Admins can Access Pending Applications"},status=status.HTTP_403_FORBIDDEN)
         pending_applications=KYCApplication.objects.filter(current_status__in=["SUBMITTED","IN_REVIEW"])
 
         serializer=KYCApplicationListSerializer(pending_applications,many=True)
@@ -231,13 +231,11 @@ class KYCApplicationViewSet(viewsets.ModelViewSet):
             changed_by=request.user
 
         )
-        application.current_status=new_status
-        application.save()
-        
+        application.current_status=new_status 
         trust_score, risk_level = compute_trust_score(application)
-
         application.trust_score = trust_score
         application.risk_level = risk_level
+
         application.save()
 
         return Response(
