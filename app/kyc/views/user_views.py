@@ -42,6 +42,15 @@ class KYCApplicationViewSet(viewsets.ModelViewSet):
 
     def is_user_role(self, user):
      return hasattr(user, "role") and user.role == "USER"
+    
+    def create_status_history(self, application, old_status, new_status, user):
+        StatusHistory.objects.create(
+        application=application,
+        old_status=old_status,
+        new_status=new_status,
+        changed_by=user
+    )
+
 
 
     def get_queryset(self):
@@ -149,12 +158,8 @@ class KYCApplicationViewSet(viewsets.ModelViewSet):
            return Response({"error": str(e)},status=status.HTTP_400_BAD_REQUEST)
 
 
-       StatusHistory.objects.create(
-                application=application,
-                old_status=old_status,
-                new_status=new_status,
-                 changed_by=request.user
-    )
+       self.create_status_history(application, old_status, new_status, request.user)
+
 
        application.current_status = new_status
        application.save()
@@ -228,13 +233,8 @@ class KYCApplicationViewSet(viewsets.ModelViewSet):
         old_status=application.current_status
         new_status="SUBMITTED"
 
-        StatusHistory.objects.create(
-            application=application,
-            old_status=old_status,
-            new_status=new_status,
-            changed_by=request.user
+        self.create_status_history(application, old_status, new_status, request.user)
 
-        )
         application.current_status=new_status 
         trust_score, risk_level = compute_trust_score(application)
         application.trust_score = trust_score
