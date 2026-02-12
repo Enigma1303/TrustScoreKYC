@@ -1,6 +1,7 @@
 from kyc.models import DocumentUpload
 from django.utils import timezone
-
+import logging 
+logger =logging.getLogger(__name__)
 def compute_document_completion_score(application):
     required_documents=[
         doc.value for doc in DocumentUpload.DocumentType
@@ -10,6 +11,8 @@ def compute_document_completion_score(application):
     unique_doc_type_count=uploaded_docs_types.distinct().count()
 
     totaldoctypes=len(required_documents)
+    if totaldoctypes==0:
+        return 0
     document_completion_score=unique_doc_type_count/totaldoctypes
 
     return document_completion_score
@@ -52,6 +55,13 @@ def compute_trust_score(application):
         risk_level = "MEDIUM"
     else:
         risk_level = "HIGH"
+
+    logger.debug(f"Trust score computed for application {application.id}: "
+        f"document_score={document_score:.2f}, "
+        f"resub_penalty={resubmission_penalty:.2f}, "
+        f"profile_score={profile_consistency:.2f}, "
+        f"final={trust_score}, risk={risk_level}"
+    )      
 
     return trust_score, risk_level
 
