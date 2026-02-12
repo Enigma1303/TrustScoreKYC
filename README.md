@@ -154,6 +154,19 @@ Supported roles:
 
 ## 🗂 Database Models
 
+
+### 🛠 Tech Stack
+
+- Python 3.11
+- Django 4.x
+- Django REST Framework
+- MySQL (Dockerized)
+- SimpleJWT (JWT Authentication)
+- django-filter (Filtering & Search)
+- drf-spectacular (OpenAPI / Swagger Documentation)
+- Docker & Docker Compose
+
+
 ### User
 - email
 - password
@@ -232,6 +245,18 @@ All status changes are recorded in `StatusHistory`.
 - All actions logged in StatusHistory
 
 ---
+
+## 🏗 Infrastructure & Database
+
+The application is containerized using Docker Compose.
+
+Services:
+
+- **Web Service** – Django REST Framework API
+- **Database Service** – MySQL 8.0 (Official Docker Image)
+
+The database runs inside a Docker container and is configured via environment variables defined in the `.env` file.
+
 
 ## 🖼 Image Upload & Media Handling
 
