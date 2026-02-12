@@ -3,6 +3,11 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.exceptions import MethodNotAllowed
+from rest_framework import mixins
+
+def destroy(self, request, *args, **kwargs):
+    raise MethodNotAllowed("DELETE")
 
 from drf_spectacular.utils import extend_schema
 
@@ -25,7 +30,10 @@ from kyc.services.status_rules import validate_status_transition
 from kyc.services import compute_trust_score
 
 
-class KYCApplicationViewSet(viewsets.ModelViewSet):
+class KYCApplicationViewSet(mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet):
     """KYC applications API"""
     queryset = KYCApplication.objects.all()
 
